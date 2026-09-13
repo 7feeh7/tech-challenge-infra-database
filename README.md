@@ -2,6 +2,18 @@
 
 Terraform do RDS PostgreSQL, security groups, Secrets Manager e exports SSM consumidos pela aplicacao e pelas Functions.
 
+## Arquitetura (este repositório)
+
+```mermaid
+flowchart LR
+    SSM_IN[SSM infra-kubernetes] --> RDS[RDS PostgreSQL 16]
+    RDS --> SM[Secrets Manager]
+    SM --> SSM_OUT[SSM database/*]
+    SSM_OUT --> API[API EKS + Lambda auth]
+```
+
+Visão completa: [`tech-challenge/docs/diagramas/componentes-nuvem.md`](../tech-challenge/docs/diagramas/componentes-nuvem.md) · Banco: [`tech-challenge/docs/banco/`](../tech-challenge/docs/banco/README.md) · ER: [`modelo-relacional-er.md`](../tech-challenge/docs/diagramas/modelo-relacional-er.md)
+
 > **Ambiente unico (001-R1):** apenas `producao` e provisionado. `develop` valida sem credencial AWS.
 
 ## Responsabilidade
