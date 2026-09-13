@@ -1,6 +1,17 @@
 # tech-challenge-infra-database
 
-Terraform do RDS PostgreSQL, security groups, Secrets Manager e exports SSM consumidos pela aplicacao e pelas Functions.
+Terraform do RDS PostgreSQL, security groups, Secrets Manager e exports SSM consumidos pela aplicação e pelas Functions.
+
+## Propósito e limites
+
+| Dentro deste repo | Fora deste repo |
+| --- | --- |
+| RDS PostgreSQL 16, SG, Secrets Manager, alarmes CloudWatch | VPC/subnets → SSM de `tech-challenge-infra-kubernetes` |
+| Exports SSM `/tech-challenge/producao/database/*` | Schema, migrations, seed demo → `tech-challenge-oficina` |
+
+## Dockerfile
+
+**Não aplicável.** Repositório somente Terraform — o serviço de banco é RDS gerenciado pela AWS.
 
 ## Arquitetura (este repositório)
 
@@ -12,7 +23,7 @@ flowchart LR
     SSM_OUT --> API[API EKS + Lambda auth]
 ```
 
-Visão completa: [`tech-challenge/docs/diagramas/componentes-nuvem.md`](../tech-challenge/docs/diagramas/componentes-nuvem.md) · Banco: [`tech-challenge/docs/banco/`](../tech-challenge/docs/banco/README.md) · ER: [`modelo-relacional-er.md`](../tech-challenge/docs/diagramas/modelo-relacional-er.md)
+Visão completa: [componentes-nuvem](https://github.com/7feeh7/tech-challenge-oficina/blob/main/docs/diagramas/componentes-nuvem.md) · Banco: [docs/banco](https://github.com/7feeh7/tech-challenge-oficina/tree/main/docs/banco) · ER: [modelo-relacional-er](https://github.com/7feeh7/tech-challenge-oficina/blob/main/docs/diagramas/modelo-relacional-er.md)
 
 > **Ambiente unico (001-R1):** apenas `producao` e provisionado. `develop` valida sem credencial AWS.
 
@@ -27,7 +38,24 @@ Visão completa: [`tech-challenge/docs/diagramas/componentes-nuvem.md`](../tech-
 | CloudWatch | Logs PostgreSQL + alarmes CPU/conexoes/storage |
 | SSM | Endpoint, porta, ARN do secret, SG do RDS |
 
-Schema e migrations permanecem em `tech-challenge/prisma/`.
+Schema e migrations permanecem em [`tech-challenge-oficina/prisma/`](https://github.com/7feeh7/tech-challenge-oficina/tree/main/prisma).
+
+## Repositórios relacionados
+
+| Repositório | URL | Papel |
+| --- | --- | --- |
+| tech-challenge-infra-kubernetes | https://github.com/7feeh7/tech-challenge-infra-kubernetes | **Deploy 1º** — VPC e SSM infra |
+| **tech-challenge-infra-database** (este) | https://github.com/7feeh7/tech-challenge-infra-database | **Deploy 2º** — RDS |
+| tech-challenge-serverless | https://github.com/7feeh7/tech-challenge-serverless | Deploy 3º — consome `db_secret_arn` |
+| tech-challenge-oficina | https://github.com/7feeh7/tech-challenge-oficina | Deploy 4º — migrations + API |
+
+## Swagger / OpenAPI
+
+**Não aplicável.** API documentada em [tech-challenge-oficina/docs/openapi.json](https://github.com/7feeh7/tech-challenge-oficina/blob/main/docs/openapi.json).
+
+## Deploy ativo
+
+SSM `/tech-challenge/producao/database/rds_endpoint`, `db_secret_arn` — sem exposição de senha em outputs Terraform.
 
 ## Tecnologias
 
