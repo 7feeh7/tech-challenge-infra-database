@@ -1,0 +1,48 @@
+name: PR Validation
+
+# Validacao sem credencial AWS — PR e push em develop.
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/**"
+  push:
+    branches: [develop]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/**"
+
+env:
+  TF_VERSION: 1.15.8
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: terraform fmt -check -recursive
+        working-directory: terraform
+      - run: terraform init -backend=false
+        working-directory: terraform
+      - run: terraform validate -no-color
+        working-directory: terraform
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@v3.82.13
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha || github.event.before }}
+          head: HEAD
+          extra_args: --only-verified
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform

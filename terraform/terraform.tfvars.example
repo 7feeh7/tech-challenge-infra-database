@@ -1,0 +1,3 @@
+aws_region   = "us-east-1"
+environment  = "producao"   # unico ambiente provisionado (001-R1)
+project_name = "tech-challenge"
