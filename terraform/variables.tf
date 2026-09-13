@@ -51,7 +51,7 @@ variable "db_multi_az" {
 }
 
 variable "db_skip_final_snapshot" {
-  description = "Pular snapshot final ao destruir."
+  description = "Pular snapshot final ao destruir (ignorado em producao, que sempre gera snapshot)."
   type        = bool
   default     = true
 }

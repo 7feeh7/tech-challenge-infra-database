@@ -26,15 +26,21 @@ resource "aws_db_instance" "postgres" {
   port     = 5432
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
+  parameter_group_name   = aws_db_parameter_group.postgres16.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
   multi_az               = var.db_multi_az
 
   iam_database_authentication_enabled = true
 
-  backup_retention_period = var.environment == "producao" ? 7 : 0
-  deletion_protection     = var.environment == "producao" #tfsec:ignore:AVD-AWS-0177
-  skip_final_snapshot     = var.db_skip_final_snapshot
+  backup_retention_period         = var.environment == "producao" ? 7 : 0
+  backup_window                   = "03:00-04:00"
+  maintenance_window              = "sun:04:00-sun:05:00"
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  deletion_protection             = var.environment == "producao" #tfsec:ignore:AVD-AWS-0177
+  skip_final_snapshot             = var.environment == "producao" ? false : var.db_skip_final_snapshot
+  final_snapshot_identifier       = var.environment == "producao" ? "${var.project_name}-${var.environment}-final" : null
+  copy_tags_to_snapshot           = true
 
   tags = {
     Name = "${var.project_name}-${var.environment}-db"
