@@ -1,0 +1,15 @@
+# Excecoes alinhadas ao ADR de custo / ambiente unico e aos #tfsec:ignore.
+# Checks novos (nao listados) continuam bloqueando a CI.
+skip-check:
+  # RDS / custo / ambiente unico.
+  - CKV_AWS_293 # deletion protection so em producao
+  - CKV_AWS_133 # backup_retention 7 so em producao
+  - CKV_AWS_118 # enhanced monitoring (custo)
+  - CKV_AWS_353 # Performance Insights nao cabe em db.t3.micro
+  - CKV_AWS_157 # Multi-AZ via var.db_multi_az (Checkov nao resolve)
+  - CKV_AWS_226 # minor upgrades via janela de manutencao, nao automatico
+
+  # Secrets / SSM — senha no Secrets Manager; SSM e contrato (IDs/ARNs).
+  - CKV_AWS_149 # Secrets Manager sem CMK
+  - CKV2_AWS_57 # rotacao automatica; senha gerada no apply
+  - CKV2_AWS_34 # parametros String de contrato
