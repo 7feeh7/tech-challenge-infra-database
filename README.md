@@ -324,5 +324,3 @@ Reverta o commit e merge em `main`, ou `workflow_dispatch` → destroy (manual).
 ## Troubleshooting
 
 Ver [`docs/backup-restore.md`](docs/backup-restore.md#troubleshooting).
-
-
