@@ -109,5 +109,5 @@ jobs:
           TABLE=$(aws ssm get-parameter --name "${PREFIX}/infra/auth_rate_limit_table" --query Parameter.Value --output text)
           aws lambda update-function-configuration \
             --function-name "$LAMBDA" \
-            --environment "Variables={DB_SECRET_ARN=${DB_ARN},JWT_SECRET_ARN=${JWT_ARN},AUTH_RATE_LIMIT_TABLE=${TABLE},NODE_ENV=${{ env.TF_ENVIRONMENT }}"
+            --environment "Variables={DB_SECRET_ARN=${DB_ARN},JWT_SECRET_ARN=${JWT_ARN},AUTH_RATE_LIMIT_TABLE=${TABLE},NODE_ENV=${{ env.TF_ENVIRONMENT }}}"
           aws lambda wait function-updated --function-name "$LAMBDA"
