@@ -45,7 +45,7 @@ jobs:
             aws ssm get-parameter --name "${PREFIX}/infra/${PARAM}"
           done
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
