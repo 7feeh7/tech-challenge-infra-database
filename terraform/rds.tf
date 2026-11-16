@@ -20,9 +20,9 @@ resource "aws_db_instance" "postgres" {
   storage_type      = "gp3"
   storage_encrypted = true
 
-  db_name  = var.db_name
-  username = var.db_username
-  password = random_password.db_password.result
+  db_name  = var.rds_initial_db_name
+  username = var.db_master_username
+  password = random_password.master_db_password.result
   port     = 5432
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
