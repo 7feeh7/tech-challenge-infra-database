@@ -35,9 +35,17 @@ export OFICINA_DB_PASSWORD=oficina-local-pass
 export BILLING_DB_PASSWORD=billing-local-pass
 
 apply_sql() {
-  envsubst '$OS_DB_USERNAME $BILLING_DB_USERNAME $OS_DATABASE_NAME $BILLING_DATABASE_NAME $OS_CONNECTION_LIMIT $BILLING_CONNECTION_LIMIT $OFICINA_DB_PASSWORD $BILLING_DB_PASSWORD' \
+  local set_passwords="${1:-true}"
+  envsubst '$OS_DB_USERNAME $BILLING_DB_USERNAME $OS_DATABASE_NAME $BILLING_DATABASE_NAME $OS_CONNECTION_LIMIT $BILLING_CONNECTION_LIMIT' \
     <"$ROOT/scripts/db-admin/provision.sql.tpl" \
     | docker exec -i "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U tcadmin -d postgres -q -f -
+
+  if [[ "$set_passwords" == "true" ]]; then
+    docker exec "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U tcadmin -d postgres -qc \
+      "ALTER ROLE oficina PASSWORD '${OFICINA_DB_PASSWORD}';"
+    docker exec "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U tcadmin -d postgres -qc \
+      "ALTER ROLE billing PASSWORD '${BILLING_DB_PASSWORD}';"
+  fi
 }
 
 role_fingerprint() {
@@ -45,9 +53,9 @@ role_fingerprint() {
     "SELECT md5(string_agg(datname, ',' ORDER BY datname)) FROM pg_database WHERE datname IN ('oficina','billing');"
 }
 
-apply_sql
+apply_sql true
 HASH1="$(role_fingerprint)"
-apply_sql
+apply_sql false
 HASH2="$(role_fingerprint)"
 
 if [[ "$HASH1" != "$HASH2" ]]; then
