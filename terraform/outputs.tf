@@ -9,8 +9,13 @@ output "rds_address" {
 }
 
 output "db_secret_arn" {
-  description = "ARN do secret no Secrets Manager."
-  value       = aws_secretsmanager_secret.db_credentials.arn
+  description = "ARN do segredo do usuario do OS (db-user-oficina)."
+  value       = aws_secretsmanager_secret.oficina_db_user.arn
+}
+
+output "billing_db_secret_arn" {
+  description = "ARN do segredo do usuario do Billing (db-user-billing)."
+  value       = aws_secretsmanager_secret.billing_db_user.arn
 }
 
 output "ssm_prefix" {

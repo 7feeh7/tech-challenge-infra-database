@@ -98,29 +98,4 @@ jobs:
           PREFIX="/tech-challenge/${{ env.TF_ENVIRONMENT }}"
           aws ssm get-parameter --name "${PREFIX}/database/rds_endpoint"
           aws ssm get-parameter --name "${PREFIX}/database/db_secret_arn"
-
-  update-lambda:
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: github.event_name == 'push' || github.event.inputs.action == 'apply'
-    environment: producao
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update auth Lambda with DB secret
-        run: |
-          PREFIX="/tech-challenge/${{ env.TF_ENVIRONMENT }}"
-          LAMBDA=$(aws ssm get-parameter --name "${PREFIX}/infra/lambda_auth_function_name" --query Parameter.Value --output text)
-          DB_ARN=$(aws ssm get-parameter --name "${PREFIX}/database/db_secret_arn" --query Parameter.Value --output text)
-          JWT_ARN=$(aws ssm get-parameter --name "${PREFIX}/infra/jwt_secret_arn" --query Parameter.Value --output text)
-          TABLE=$(aws ssm get-parameter --name "${PREFIX}/infra/auth_rate_limit_table" --query Parameter.Value --output text)
-          aws lambda update-function-configuration \
-            --function-name "$LAMBDA" \
-            --environment "Variables={DB_SECRET_ARN=${DB_ARN},JWT_SECRET_ARN=${JWT_ARN},AUTH_RATE_LIMIT_TABLE=${TABLE},NODE_ENV=${{ env.TF_ENVIRONMENT }}}"
-          aws lambda wait function-updated --function-name "$LAMBDA"
+          aws ssm get-parameter --name "${PREFIX}/database/billing_db_secret_arn"

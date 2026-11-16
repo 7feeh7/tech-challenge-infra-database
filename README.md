@@ -16,7 +16,7 @@ flowchart LR
     SSM_IN[SSM infra-kubernetes] --> RDS[RDS PostgreSQL 16]
     RDS --> SM[Secrets Manager]
     SM --> SSM_OUT[SSM database/*]
-    SSM_OUT --> API[API EKS + Lambda auth]
+    SSM_OUT --> API[OS e Billing no EKS]
 ```
 
 ## Diagrama Entidade-Relacionamento (DER)
@@ -197,7 +197,7 @@ Schema e migrations permanecem no projeto [`tech-challenge-oficina`](https://git
 
 ## Deploy ativo
 
-SSM `/tech-challenge/producao/database/rds_endpoint`, `db_secret_arn` — sem exposição de senha em outputs Terraform.
+SSM `/tech-challenge/producao/database/*` — ARNs e endpoints; senhas só no Secrets Manager e no state protegido.
 
 ## Tecnologias
 
@@ -245,7 +245,9 @@ Parametros **publicados** por este repo em `/tech-challenge/producao/database/*`
 | Parametro                                   | Consumidor                |
 | ------------------------------------------- | ------------------------- |
 | `rds_endpoint` / `rds_address` / `rds_port` | CI/CD, operacao           |
-| `db_secret_arn`                             | API (deploy), Lambda auth |
+| `db_secret_arn`                             | OS (`tech-challenge`) deploy e migrate |
+| `billing_db_secret_arn`                     | Billing deploy e migrate |
+| `master_db_secret_arn`                      | Job administrativo (workflow `db-admin-job.yml` apenas) |
 | `db_name`                                   | Configuracao              |
 | `rds_security_group_id`                     | Referencia cruzada        |
 
@@ -315,8 +317,6 @@ Senha e connection string **somente** no Secrets Manager.
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Deploy                             |
 | `TF_STATE_BUCKET`                             | Backend S3                         |
 | `TF_STATE_LOCK_TABLE`                         | Lock DynamoDB                      |
-| `JWT_SECRET`                                  | Atualiza env da Lambda apos deploy |
-
 ## Rollback
 
 Reverta o commit e merge em `main`, ou `workflow_dispatch` → destroy (manual).

@@ -1,0 +1,63 @@
+# Job administrativo: cria databases oficina e billing, usuarios e CONNECTION LIMIT (E09).
+# ARNs injetados pelo workflow; nenhum Kubernetes Secret com senhas.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-admin-provision
+  namespace: administracao
+  labels:
+    app: db-admin-provision
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: db-admin-provision
+    spec:
+      serviceAccountName: db-admin-job
+      restartPolicy: Never
+      containers:
+        - name: provision
+          image: public.ecr.aws/aws-cli/aws-cli:2.27.25
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "/scripts/entrypoint.sh"]
+          env:
+            - name: AWS_REGION
+              value: us-east-1
+            - name: MASTER_SECRET_ARN
+              value: __MASTER_SECRET_ARN__
+            - name: OFICINA_USER_SECRET_ARN
+              value: __OFICINA_USER_SECRET_ARN__
+            - name: BILLING_USER_SECRET_ARN
+              value: __BILLING_USER_SECRET_ARN__
+            - name: OS_DB_USERNAME
+              value: oficina
+            - name: BILLING_DB_USERNAME
+              value: billing
+            - name: OS_DATABASE_NAME
+              value: oficina
+            - name: BILLING_DATABASE_NAME
+              value: billing
+            - name: OS_CONNECTION_LIMIT
+              value: "37"
+            - name: BILLING_CONNECTION_LIMIT
+              value: "22"
+          volumeMounts:
+            - name: db-admin-scripts
+              mountPath: /scripts
+              readOnly: true
+          securityContext:
+            runAsUser: 0
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: db-admin-scripts
+          configMap:
+            name: db-admin-scripts
+            defaultMode: 0555

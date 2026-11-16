@@ -19,13 +19,32 @@ resource "aws_ssm_parameter" "rds_port" {
 resource "aws_ssm_parameter" "db_secret_arn" {
   name  = "${local.ssm_prefix}/database/db_secret_arn"
   type  = "String"
-  value = aws_secretsmanager_secret.db_credentials.arn
+  value = aws_secretsmanager_secret.oficina_db_user.arn
+}
+
+resource "aws_ssm_parameter" "billing_db_secret_arn" {
+  name  = "${local.ssm_prefix}/database/billing_db_secret_arn"
+  type  = "String"
+  value = aws_secretsmanager_secret.billing_db_user.arn
+}
+
+resource "aws_ssm_parameter" "master_db_secret_arn" {
+  name        = "${local.ssm_prefix}/database/master_db_secret_arn"
+  type        = "String"
+  value       = aws_secretsmanager_secret.master_db_credentials.arn
+  description = "ARN do master — somente pipeline do Job administrativo (E09); microsservicos nao consomem."
 }
 
 resource "aws_ssm_parameter" "db_name" {
   name  = "${local.ssm_prefix}/database/db_name"
   type  = "String"
-  value = var.db_name
+  value = var.os_database_name
+}
+
+resource "aws_ssm_parameter" "billing_db_name" {
+  name  = "${local.ssm_prefix}/database/billing_db_name"
+  type  = "String"
+  value = var.billing_database_name
 }
 
 resource "aws_ssm_parameter" "rds_security_group_id" {
