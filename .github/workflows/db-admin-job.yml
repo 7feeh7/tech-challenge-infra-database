@@ -55,5 +55,9 @@ jobs:
             -e "s|__OFICINA_USER_SECRET_ARN__|${{ steps.ssm.outputs.oficina_arn }}|" \
             -e "s|__BILLING_USER_SECRET_ARN__|${{ steps.ssm.outputs.billing_arn }}|" \
             k8s/db-admin-job.yaml | kubectl apply -f -
-          kubectl -n administracao wait --for=condition=complete --timeout=600s "job/${JOB_NAME}"
+          if ! kubectl -n administracao wait --for=condition=complete --timeout=600s "job/${JOB_NAME}"; then
+            echo "Job falhou; coletando logs sem expor segredos de aplicacao:"
+            kubectl -n administracao logs "job/${JOB_NAME}" || true
+            exit 1
+          fi
           kubectl -n administracao logs "job/${JOB_NAME}"

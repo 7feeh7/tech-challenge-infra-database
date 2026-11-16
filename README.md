@@ -225,7 +225,9 @@ tech-challenge-infra-database/
 │   ├── pr-validation.yml          # Validação em PRs (não toca AWS)
 │   └── deploy.yml                 # Apply em main
 ├── docs/
-│   └── backup-restore.md          # Backup, restore e troubleshooting
+│   ├── backup-restore.md          # Backup, restore e troubleshooting
+│   ├── orcamento-conexoes.md      # Orçamento de conexões (E09)
+│   └── rotacao-credenciais-db.md  # Rotação de senha de app sem reexecutar o Job
 └── README.md
 ```
 
@@ -250,6 +252,17 @@ Parametros **publicados** por este repo em `/tech-challenge/producao/database/*`
 | `master_db_secret_arn`                      | Job administrativo (workflow `db-admin-job.yml` apenas) |
 | `db_name`                                   | Configuracao              |
 | `rds_security_group_id`                     | Referencia cruzada        |
+
+### Validação local do Job administrativo (complemento E09)
+
+Requer Docker. Não imprime senhas de teste nos logs de sucesso.
+
+```bash
+bash scripts/db-admin/test-complemento-local.sh
+bash scripts/db-admin/test-idempotencia-local.sh
+```
+
+Rotação de credenciais de aplicação: `docs/rotacao-credenciais-db.md`.
 
 ## Variaveis
 

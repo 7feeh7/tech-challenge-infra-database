@@ -43,10 +43,14 @@ spec:
               value: "37"
             - name: BILLING_CONNECTION_LIMIT
               value: "22"
+            - name: WORK_DIR
+              value: /tmp/db-admin-work
           volumeMounts:
             - name: db-admin-scripts
               mountPath: /scripts
               readOnly: true
+            - name: db-admin-work
+              mountPath: /tmp/db-admin-work
           securityContext:
             runAsUser: 0
           resources:
@@ -61,3 +65,5 @@ spec:
           configMap:
             name: db-admin-scripts
             defaultMode: 0555
+        - name: db-admin-work
+          emptyDir: {}
