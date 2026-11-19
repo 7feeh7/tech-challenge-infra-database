@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Provisiona databases e usuarios no RDS. Senhas nunca vao para stdout/stderr.
+# Provisiona databases e usuarios no RDS. Senhas e verificadores nunca vao para stdout/stderr, argumento
+# de linha de comando, arquivo ou log do PostgreSQL.
 set -euo pipefail
 
+SCRIPTS_DIR="/scripts"
 WORK_DIR="${WORK_DIR:-/tmp/db-admin-work}"
+# Primeira versao do psql cuja libpq gera o verificador SCRAM-SHA-256 no cliente (PQencryptPasswordConn).
+MIN_PSQL_MAJOR_VERSION=10
 
 log() {
   printf '%s\n' "$*" >&2
@@ -41,6 +45,13 @@ if ! command -v psql >/dev/null 2>&1; then
   fi
 fi
 
+# O pacote generico do yum pode trazer um psql antigo, cujo \password gera hash MD5 em vez de SCRAM.
+psql_major_version="$(psql --version | grep -oE '[0-9]+' | head -n 1)"
+if (( psql_major_version < MIN_PSQL_MAJOR_VERSION )); then
+  log "Cliente psql ${psql_major_version} nao gera verificador SCRAM-SHA-256 (minimo: ${MIN_PSQL_MAJOR_VERSION})."
+  exit 1
+fi
+
 install_if_missing jq jq
 install_if_missing envsubst gettext
 
@@ -71,61 +82,47 @@ for v in MASTER_USER MASTER_PASS MASTER_HOST MASTER_PORT MASTER_DB OFICINA_PASS 
   fi
 done
 
-export PGPASSWORD="$MASTER_PASS"
-PSQL=(psql -v ON_ERROR_STOP=1 -h "$MASTER_HOST" -p "$MASTER_PORT" -U "$MASTER_USER" -d "$MASTER_DB")
+# O \password le a senha linha a linha da entrada padrao: quebra de linha no valor gravaria outra senha.
+for v in OFICINA_PASS BILLING_PASS; do
+  if [[ "${!v}" == *$'\n'* || "${!v}" == *$'\r'* ]]; then
+    log "Senha com quebra de linha no Secrets Manager (identificador interno: ${v})."
+    exit 1
+  fi
+done
 
-role_exists() {
-  local role="$1"
-  local found
-  found="$("${PSQL[@]}" -tAc "SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '${role}'" | tr -d '[:space:]')"
-  [[ "$found" == "1" ]]
+# A senha do master fica so no ambiente de cada psql, nunca exportada para os demais processos.
+run_psql() {
+  PGPASSWORD="$MASTER_PASS" psql -v ON_ERROR_STOP=1 \
+    -h "$MASTER_HOST" -p "$MASTER_PORT" -U "$MASTER_USER" -d "$MASTER_DB" "$@"
 }
 
-escape_sql_literal() {
-  local value="$1"
-  printf "%s" "$value" | sed "s/'/''/g"
-}
-
-apply_role_password() {
+create_role_with_password() {
   local role="$1"
-  local pass="$2"
-  local escaped_pass
-  local sql_file="${WORK_DIR}/set_password_${role}.sql"
-  escaped_pass="$(escape_sql_literal "$pass")"
-  printf 'ALTER ROLE "%s" PASSWORD '\''%s'\'';\n' "$role" "$escaped_pass" >"$sql_file"
-  "${PSQL[@]}" -q -f "$sql_file"
-  rm -f "$sql_file"
+  local password="$2"
+  if ! printf '%s\n%s\n' "$password" "$password" \
+    | run_psql -q -v role="$role" -f "${SCRIPTS_DIR}/create-role-with-password.sql"; then
+    log "Falha ao criar o papel ${role} com senha; nenhuma senha foi gravada para ele."
+    exit 1
+  fi
 }
 
 run_sql() {
   local sql_file="${WORK_DIR}/provision.runtime.sql"
   envsubst '$OS_DB_USERNAME $BILLING_DB_USERNAME $OS_DATABASE_NAME $BILLING_DATABASE_NAME $OS_CONNECTION_LIMIT $BILLING_CONNECTION_LIMIT' \
-    </scripts/provision.sql.tpl >"$sql_file"
-  "${PSQL[@]}" -q -f "$sql_file"
+    <"${SCRIPTS_DIR}/provision.sql.tpl" >"$sql_file"
+  run_psql -q -f "$sql_file"
   rm -f "$sql_file"
 }
 
 export OS_DB_USERNAME BILLING_DB_USERNAME OS_DATABASE_NAME BILLING_DATABASE_NAME
 export OS_CONNECTION_LIMIT BILLING_CONNECTION_LIMIT
 
-OFICINA_EXISTIA=false
-BILLING_EXISTIA=false
-if role_exists "$OS_DB_USERNAME"; then
-  OFICINA_EXISTIA=true
-fi
-if role_exists "$BILLING_DB_USERNAME"; then
-  BILLING_EXISTIA=true
-fi
+log "Criando papeis com senha em sessao sem registro de comandos (sem exibir credenciais)..."
+create_role_with_password "$OS_DB_USERNAME" "$OFICINA_PASS"
+create_role_with_password "$BILLING_DB_USERNAME" "$BILLING_PASS"
 
 log "Aplicando SQL administrativo (sem exibir credenciais)..."
 run_sql
 
-if ! $OFICINA_EXISTIA && role_exists "$OS_DB_USERNAME"; then
-  apply_role_password "$OS_DB_USERNAME" "$OFICINA_PASS"
-fi
-if ! $BILLING_EXISTIA && role_exists "$BILLING_DB_USERNAME"; then
-  apply_role_password "$BILLING_DB_USERNAME" "$BILLING_PASS"
-fi
-
-MAX_CONN="$("${PSQL[@]}" -tAc 'SHOW max_connections' | tr -d '[:space:]')"
+MAX_CONN="$(run_psql -tAc 'SHOW max_connections' | tr -d '[:space:]')"
 log "Provisionamento concluido. max_connections=${MAX_CONN}"

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-CONTAINER_NAME="tc-e09-pg-test"
+CONTAINER_NAME="tc-e09-pg-test-$$"
 
 cleanup() {
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
@@ -34,18 +34,16 @@ export BILLING_CONNECTION_LIMIT=22
 export OFICINA_DB_PASSWORD=oficina-local-pass
 export BILLING_DB_PASSWORD=billing-local-pass
 
+# Os papeis nascem fora do SQL de provisionamento (create-role-with-password.sql); aqui sao so fixture do teste.
+create_role_fixtures() {
+  docker exec "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U tcadmin -d postgres -qc \
+    "CREATE ROLE oficina LOGIN PASSWORD '${OFICINA_DB_PASSWORD}'; CREATE ROLE billing LOGIN PASSWORD '${BILLING_DB_PASSWORD}';"
+}
+
 apply_sql() {
-  local set_passwords="${1:-true}"
   envsubst '$OS_DB_USERNAME $BILLING_DB_USERNAME $OS_DATABASE_NAME $BILLING_DATABASE_NAME $OS_CONNECTION_LIMIT $BILLING_CONNECTION_LIMIT' \
     <"$ROOT/scripts/db-admin/provision.sql.tpl" \
     | docker exec -i "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U tcadmin -d postgres -q -f -
-
-  if [[ "$set_passwords" == "true" ]]; then
-    docker exec "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U tcadmin -d postgres -qc \
-      "ALTER ROLE oficina PASSWORD '${OFICINA_DB_PASSWORD}';"
-    docker exec "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U tcadmin -d postgres -qc \
-      "ALTER ROLE billing PASSWORD '${BILLING_DB_PASSWORD}';"
-  fi
 }
 
 role_fingerprint() {
@@ -53,9 +51,10 @@ role_fingerprint() {
     "SELECT md5(string_agg(datname, ',' ORDER BY datname)) FROM pg_database WHERE datname IN ('oficina','billing');"
 }
 
-apply_sql true
+create_role_fixtures
+apply_sql
 HASH1="$(role_fingerprint)"
-apply_sql false
+apply_sql
 HASH2="$(role_fingerprint)"
 
 if [[ "$HASH1" != "$HASH2" ]]; then

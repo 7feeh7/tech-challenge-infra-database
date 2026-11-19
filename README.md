@@ -255,12 +255,15 @@ Parametros **publicados** por este repo em `/tech-challenge/producao/database/*`
 
 ### Validação local do Job administrativo (complemento E09)
 
-Requer Docker. Não imprime senhas de teste nos logs de sucesso.
+Requer Docker. Usa PostgreSQL 16 descartável numa rede Docker privada, com o registro equivalente ao do RDS (`log_statement = ddl`), e lê o log real do servidor. Não imprime senhas de teste.
 
 ```bash
 bash scripts/db-admin/test-complemento-local.sh
+bash scripts/db-admin/test-senha-fora-do-log-local.sh
 bash scripts/db-admin/test-idempotencia-local.sh
 ```
+
+O Job cria os papéis e define as senhas numa sessão própria do master, sem registro de comandos e com verificador SCRAM-SHA-256 gerado pelo `psql` (`scripts/db-admin/create-role-with-password.sql`); detalhes em `docs/rotacao-credenciais-db.md`. Artefatos dos testes ficam em `.local-test/` (fora do repositório).
 
 Rotação de credenciais de aplicação: `docs/rotacao-credenciais-db.md`.
 
