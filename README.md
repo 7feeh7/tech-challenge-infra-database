@@ -267,6 +267,10 @@ O Job cria os papéis e define as senhas numa sessão própria do master, sem re
 
 Rotação de credenciais de aplicação: `docs/rotacao-credenciais-db.md`.
 
+### Senhas geradas e URL de conexão
+
+As senhas do master, do `oficina` e do `billing` (`random_password` em `terraform/secrets.tf`) usam só letras, números e `-_.~` (caracteres não reservados da RFC 3986), com ao menos um de cada classe. O OS e o Billing montam a `DATABASE_URL` sem codificação, e `#`, `?`, `%`, `/`, `@` e `:` a quebrariam. O CI roda `bash scripts/validate-password-charset.sh` e reprova qualquer outro conjunto.
+
 ## Variaveis
 
 | Variavel                 | Default       | Descricao                                         |
