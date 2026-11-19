@@ -2,22 +2,37 @@ resource "random_id" "secret_suffix" {
   byte_length = 4
 }
 
+# Senhas so com caracteres nao reservados em URL (-_.~): a DATABASE_URL do OS e do Billing
+# e montada sem codificacao, e #, ?, %, /, @ e : quebram ou corrompem a URL.
+# Os min_* garantem a complexidade que o conjunto menor de especiais nao asseguraria por sorteio.
 resource "random_password" "master_db_password" {
   length           = 16
   special          = true
-  override_special = "!#$%&*()-_=+[]{}:?"
+  override_special = "-_.~"
+  min_upper        = 1
+  min_lower        = 1
+  min_numeric      = 1
+  min_special      = 1
 }
 
 resource "random_password" "oficina_db_password" {
   length           = 16
   special          = true
-  override_special = "!#$%&*()-_=+[]{}:?"
+  override_special = "-_.~"
+  min_upper        = 1
+  min_lower        = 1
+  min_numeric      = 1
+  min_special      = 1
 }
 
 resource "random_password" "billing_db_password" {
   length           = 16
   special          = true
-  override_special = "!#$%&*()-_=+[]{}:?"
+  override_special = "-_.~"
+  min_upper        = 1
+  min_lower        = 1
+  min_numeric      = 1
+  min_special      = 1
 }
 
 # Master: somente Job administrativo (IRSA db-credentials-*).

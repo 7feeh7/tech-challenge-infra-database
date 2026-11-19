@@ -27,7 +27,7 @@ O Job exige `psql` 10 ou superior (cliente que gera SCRAM) e rejeita senha com q
 
 Ordem recomendada; não imprima nem registre o valor da nova senha em ticket, chat ou log.
 
-1. **Gerar** nova senha forte e **gravar** no segredo do usuário no Secrets Manager (`db-user-oficina` ou `db-user-billing`), mantendo o mesmo JSON (`username`, `password`, `host`, `port`, `dbname`, `engine`).
+1. **Gerar** nova senha forte, só com letras, números e `-_.~` (a `DATABASE_URL` dos serviços é montada sem codificação), e **gravar** no segredo do usuário no Secrets Manager (`db-user-oficina` ou `db-user-billing`), mantendo o mesmo JSON (`username`, `password`, `host`, `port`, `dbname`, `engine`).
 2. **No RDS**, com credencial master (fora dos pipelines de aplicação), numa sessão interativa do `psql` que suprime o registro e usa `\password`, que envia só o verificador:
    ```sql
    SET log_statement = 'none';

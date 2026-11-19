@@ -34,6 +34,7 @@ jobs:
         working-directory: terraform
       - run: terraform validate -no-color
         working-directory: terraform
+      - run: bash scripts/validate-password-charset.sh
 
   security-scan:
     runs-on: ubuntu-latest
