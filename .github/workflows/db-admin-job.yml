@@ -44,6 +44,7 @@ jobs:
           kubectl -n administracao delete configmap db-admin-scripts --ignore-not-found
           kubectl -n administracao create configmap db-admin-scripts \
             --from-file=entrypoint.sh=scripts/db-admin/entrypoint.sh \
+            --from-file=create-role-with-password.sql=scripts/db-admin/create-role-with-password.sql \
             --from-file=provision.sql.tpl=scripts/db-admin/provision.sql.tpl
 
       - name: Aplicar Job administrativo

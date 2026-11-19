@@ -1,24 +1,8 @@
--- Idempotente: segunda execucao nao recria roles/databases; senhas novas somente pelo entrypoint na criacao.
+-- Idempotente: segunda execucao nao recria databases e reaplica apenas CONNECTION LIMIT e privilegios.
+-- Os papeis e as senhas sao criados antes, por create-role-with-password.sql, em sessao sem registro de comandos.
 
-SELECT format(
-  'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE CONNECTION LIMIT %s',
-  '${OS_DB_USERNAME}',
-  ${OS_CONNECTION_LIMIT}
-)
-WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '${OS_DB_USERNAME}')\gexec
-
-SELECT format('ALTER ROLE %I CONNECTION LIMIT %s', '${OS_DB_USERNAME}', ${OS_CONNECTION_LIMIT})
-WHERE EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '${OS_DB_USERNAME}')\gexec
-
-SELECT format(
-  'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE CONNECTION LIMIT %s',
-  '${BILLING_DB_USERNAME}',
-  ${BILLING_CONNECTION_LIMIT}
-)
-WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '${BILLING_DB_USERNAME}')\gexec
-
-SELECT format('ALTER ROLE %I CONNECTION LIMIT %s', '${BILLING_DB_USERNAME}', ${BILLING_CONNECTION_LIMIT})
-WHERE EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '${BILLING_DB_USERNAME}')\gexec
+ALTER ROLE "${OS_DB_USERNAME}" CONNECTION LIMIT ${OS_CONNECTION_LIMIT};
+ALTER ROLE "${BILLING_DB_USERNAME}" CONNECTION LIMIT ${BILLING_CONNECTION_LIMIT};
 
 SELECT format('CREATE DATABASE %I OWNER %I', '${OS_DATABASE_NAME}', '${OS_DB_USERNAME}')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = '${OS_DATABASE_NAME}')\gexec
