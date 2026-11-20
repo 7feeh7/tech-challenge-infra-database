@@ -90,6 +90,7 @@ start_postgres() {
     -e POSTGRES_DB=postgres \
     "$PG_IMAGE" \
     -c log_statement=ddl \
+    -c log_parameter_max_length=0 \
     -c log_min_error_statement=error \
     -c log_connections=on \
     -c log_disconnections=on \
