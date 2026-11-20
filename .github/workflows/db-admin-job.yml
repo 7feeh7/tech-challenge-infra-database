@@ -1,0 +1,64 @@
+name: Database Admin Job
+
+# Cria databases/usuarios no RDS privado via Job no namespace administracao.
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  TF_ENVIRONMENT: producao
+
+jobs:
+  run-db-admin:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: producao
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolver parametros SSM
+        id: ssm
+        run: |
+          PREFIX="/tech-challenge/${{ env.TF_ENVIRONMENT }}"
+          echo "eks=$(aws ssm get-parameter --name "${PREFIX}/infra/eks_cluster_name" --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
+          echo "master_arn=$(aws ssm get-parameter --name "${PREFIX}/database/master_db_secret_arn" --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
+          echo "oficina_arn=$(aws ssm get-parameter --name "${PREFIX}/database/db_secret_arn" --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
+          echo "billing_arn=$(aws ssm get-parameter --name "${PREFIX}/database/billing_db_secret_arn" --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Configurar acesso ao cluster
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ steps.ssm.outputs.eks }}" \
+            --region "${{ env.AWS_REGION }}"
+
+      - name: Publicar scripts do Job
+        run: |
+          kubectl -n administracao delete configmap db-admin-scripts --ignore-not-found
+          kubectl -n administracao create configmap db-admin-scripts \
+            --from-file=entrypoint.sh=scripts/db-admin/entrypoint.sh \
+            --from-file=create-role-with-password.sql=scripts/db-admin/create-role-with-password.sql \
+            --from-file=provision.sql.tpl=scripts/db-admin/provision.sql.tpl
+
+      - name: Aplicar Job administrativo
+        run: |
+          JOB_NAME="db-admin-provision-${GITHUB_RUN_ID}"
+          sed \
+            -e "s|name: db-admin-provision|name: ${JOB_NAME}|" \
+            -e "s|__MASTER_SECRET_ARN__|${{ steps.ssm.outputs.master_arn }}|" \
+            -e "s|__OFICINA_USER_SECRET_ARN__|${{ steps.ssm.outputs.oficina_arn }}|" \
+            -e "s|__BILLING_USER_SECRET_ARN__|${{ steps.ssm.outputs.billing_arn }}|" \
+            k8s/db-admin-job.yaml | kubectl apply -f -
+          if ! kubectl -n administracao wait --for=condition=complete --timeout=600s "job/${JOB_NAME}"; then
+            echo "Job falhou; coletando logs sem expor segredos de aplicacao:"
+            kubectl -n administracao logs "job/${JOB_NAME}" || true
+            exit 1
+          fi
+          kubectl -n administracao logs "job/${JOB_NAME}"

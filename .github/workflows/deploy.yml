@@ -1,20 +1,23 @@
 name: Deploy Database
 
-# terraform apply toca a nuvem — apenas push em main.
+# terraform apply toca a nuvem — apenas push em main (terraform/**).
 on:
   push:
     branches: [main]
     paths:
       - "terraform/**"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
       action:
         description: Terraform action
         required: true
-        default: destroy
+        default: plan
         type: choice
-        options: [apply, destroy]
+        options: [plan, apply, destroy]
+      confirm_destroy:
+        description: Digite DESTRUIR-tech-challenge-infra-database para confirmar destroy
+        required: false
+        type: string
 
 env:
   AWS_REGION: us-east-1
@@ -24,12 +27,22 @@ env:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: producao
     permissions:
       id-token: write
       contents: read
     steps:
+      - name: Validar confirmação de destroy
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTRUIR-tech-challenge-infra-database" ]; then
+            echo "Confirmação de destroy inválida ou ausente."
+            echo "Digite exatamente: DESTRUIR-tech-challenge-infra-database"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -60,7 +73,7 @@ jobs:
         working-directory: terraform
 
       - name: Terraform Plan
-        if: github.event_name == 'push' || github.event.inputs.action == 'apply'
+        if: github.event_name == 'push' || github.event.inputs.action == 'apply' || github.event.inputs.action == 'plan'
         run: |
           terraform plan -no-color \
             -var="environment=${{ env.TF_ENVIRONMENT }}" \
@@ -85,29 +98,4 @@ jobs:
           PREFIX="/tech-challenge/${{ env.TF_ENVIRONMENT }}"
           aws ssm get-parameter --name "${PREFIX}/database/rds_endpoint"
           aws ssm get-parameter --name "${PREFIX}/database/db_secret_arn"
-
-  update-lambda:
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: github.event_name == 'push' || github.event.inputs.action == 'apply'
-    environment: producao
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update auth Lambda with DB secret
-        run: |
-          PREFIX="/tech-challenge/${{ env.TF_ENVIRONMENT }}"
-          LAMBDA=$(aws ssm get-parameter --name "${PREFIX}/infra/lambda_auth_function_name" --query Parameter.Value --output text)
-          DB_ARN=$(aws ssm get-parameter --name "${PREFIX}/database/db_secret_arn" --query Parameter.Value --output text)
-          JWT_ARN=$(aws ssm get-parameter --name "${PREFIX}/infra/jwt_secret_arn" --query Parameter.Value --output text)
-          TABLE=$(aws ssm get-parameter --name "${PREFIX}/infra/auth_rate_limit_table" --query Parameter.Value --output text)
-          aws lambda update-function-configuration \
-            --function-name "$LAMBDA" \
-            --environment "Variables={DB_SECRET_ARN=${DB_ARN},JWT_SECRET_ARN=${JWT_ARN},AUTH_RATE_LIMIT_TABLE=${TABLE},NODE_ENV=${{ env.TF_ENVIRONMENT }}}"
-          aws lambda wait function-updated --function-name "$LAMBDA"
+          aws ssm get-parameter --name "${PREFIX}/database/billing_db_secret_arn"

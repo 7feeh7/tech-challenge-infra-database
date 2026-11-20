@@ -16,7 +16,7 @@ flowchart LR
     SSM_IN[SSM infra-kubernetes] --> RDS[RDS PostgreSQL 16]
     RDS --> SM[Secrets Manager]
     SM --> SSM_OUT[SSM database/*]
-    SSM_OUT --> API[API EKS + Lambda auth]
+    SSM_OUT --> API[OS e Billing no EKS]
 ```
 
 ## Diagrama Entidade-Relacionamento (DER)
@@ -197,7 +197,7 @@ Schema e migrations permanecem no projeto [`tech-challenge-oficina`](https://git
 
 ## Deploy ativo
 
-SSM `/tech-challenge/producao/database/rds_endpoint`, `db_secret_arn` — sem exposição de senha em outputs Terraform.
+SSM `/tech-challenge/producao/database/*` — ARNs e endpoints; senhas só no Secrets Manager e no state protegido.
 
 ## Tecnologias
 
@@ -225,7 +225,9 @@ tech-challenge-infra-database/
 │   ├── pr-validation.yml          # Validação em PRs (não toca AWS)
 │   └── deploy.yml                 # Apply em main
 ├── docs/
-│   └── backup-restore.md          # Backup, restore e troubleshooting
+│   ├── backup-restore.md          # Backup, restore e troubleshooting
+│   ├── orcamento-conexoes.md      # Orçamento de conexões (E09)
+│   └── rotacao-credenciais-db.md  # Rotação de senha de app sem reexecutar o Job
 └── README.md
 ```
 
@@ -245,9 +247,29 @@ Parametros **publicados** por este repo em `/tech-challenge/producao/database/*`
 | Parametro                                   | Consumidor                |
 | ------------------------------------------- | ------------------------- |
 | `rds_endpoint` / `rds_address` / `rds_port` | CI/CD, operacao           |
-| `db_secret_arn`                             | API (deploy), Lambda auth |
+| `db_secret_arn`                             | OS (`tech-challenge`) deploy e migrate |
+| `billing_db_secret_arn`                     | Billing deploy e migrate |
+| `master_db_secret_arn`                      | Job administrativo (workflow `db-admin-job.yml` apenas) |
 | `db_name`                                   | Configuracao              |
 | `rds_security_group_id`                     | Referencia cruzada        |
+
+### Validação local do Job administrativo (complemento E09)
+
+Requer Docker. Usa PostgreSQL 16 descartável numa rede Docker privada, com o registro equivalente ao do RDS (`log_statement = ddl`), e lê o log real do servidor. Não imprime senhas de teste.
+
+```bash
+bash scripts/db-admin/test-complemento-local.sh
+bash scripts/db-admin/test-senha-fora-do-log-local.sh
+bash scripts/db-admin/test-idempotencia-local.sh
+```
+
+O Job cria os papéis e define as senhas numa sessão própria do master, sem registro de comandos e com verificador SCRAM-SHA-256 gerado pelo `psql` (`scripts/db-admin/create-role-with-password.sql`); detalhes em `docs/rotacao-credenciais-db.md`. Artefatos dos testes ficam em `.local-test/` (fora do repositório).
+
+Rotação de credenciais de aplicação: `docs/rotacao-credenciais-db.md`.
+
+### Senhas geradas e URL de conexão
+
+As senhas do master, do `oficina` e do `billing` (`random_password` em `terraform/secrets.tf`) usam só letras, números e `-_.~` (caracteres não reservados da RFC 3986), com ao menos um de cada classe. O OS e o Billing montam a `DATABASE_URL` sem codificação, e `#`, `?`, `%`, `/`, `@` e `:` a quebrariam. O CI roda `bash scripts/validate-password-charset.sh` e reprova qualquer outro conjunto.
 
 ## Variaveis
 
@@ -315,8 +337,6 @@ Senha e connection string **somente** no Secrets Manager.
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Deploy                             |
 | `TF_STATE_BUCKET`                             | Backend S3                         |
 | `TF_STATE_LOCK_TABLE`                         | Lock DynamoDB                      |
-| `JWT_SECRET`                                  | Atualiza env da Lambda apos deploy |
-
 ## Rollback
 
 Reverta o commit e merge em `main`, ou `workflow_dispatch` → destroy (manual).

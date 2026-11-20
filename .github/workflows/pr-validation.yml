@@ -4,13 +4,14 @@ name: PR Validation
 on:
   pull_request:
     branches: [main, develop]
-    paths:
-      - "terraform/**"
-      - ".github/workflows/**"
+    # Sem filtro de paths: checks obrigatorios precisam rodar em todo PR,
+    # senao um PR so de documentacao fica bloqueado sem receber os checks.
   push:
     branches: [develop]
     paths:
       - "terraform/**"
+      - "k8s/**"
+      - "scripts/**"
       - ".github/workflows/**"
 
 env:
@@ -30,6 +31,7 @@ jobs:
         working-directory: terraform
       - run: terraform validate -no-color
         working-directory: terraform
+      - run: bash scripts/validate-password-charset.sh
 
   security-scan:
     runs-on: ubuntu-latest
