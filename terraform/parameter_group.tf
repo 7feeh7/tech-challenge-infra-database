@@ -22,6 +22,13 @@ resource "aws_db_parameter_group" "postgres16" {
     value = "ddl"
   }
 
+  # O master do RDS nao tem permissao de SET neste parametro; a sessao de senha do Job exige 0 e so
+  # dispensa o SET quando o valor ja vem do parameter group.
+  parameter {
+    name  = "log_parameter_max_length"
+    value = "0"
+  }
+
   tags = {
     Name = "${var.project_name}-${var.environment}-pg16"
   }
