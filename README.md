@@ -1,261 +1,47 @@
 # tech-challenge-infra-database
 
-Terraform do RDS PostgreSQL, security groups, Secrets Manager e exports SSM consumidos pela aplicação e pelas Functions.
+Terraform do banco relacional da oficina mecânica: RDS PostgreSQL, security group, Secrets Manager, alarmes e exports SSM. Projeto do Tech Challenge (FIAP).
 
-## Propósito e limites
-
-| Dentro deste repo                                          | Fora deste repo                                          |
-| ---------------------------------------------------------- | -------------------------------------------------------- |
-| RDS PostgreSQL 16, SG, Secrets Manager, alarmes CloudWatch | VPC/subnets → SSM de `tech-challenge-infra-kubernetes`   |
-| Exports SSM `/tech-challenge/producao/database/*`          | Schema, migrations, seed demo → `tech-challenge-oficina` |
-
-## Arquitetura
-
-```mermaid
-flowchart LR
-    SSM_IN[SSM infra-kubernetes] --> RDS[RDS PostgreSQL 16]
-    RDS --> SM[Secrets Manager]
-    SM --> SSM_OUT[SSM database/*]
-    SSM_OUT --> API[OS e Billing no EKS]
-```
-
-## Diagrama Entidade-Relacionamento (DER)
-
-```mermaid
-erDiagram
-    clientes ||--o{ veiculos : possui
-    clientes ||--o{ ordens_servico : solicita
-    clientes ||--o{ auditoria_cliente_status : auditado
-    veiculos ||--o{ ordens_servico : atendido
-
-    ordens_servico ||--o{ ordens_servico_servicos : contem
-    ordens_servico ||--o{ ordens_servico_pecas : contem
-    ordens_servico ||--o{ orcamentos : gera
-    ordens_servico ||--o{ historico_status_os : registra
-    ordens_servico |o--o{ movimentacoes_estoque : referencia
-
-    servicos ||--o{ ordens_servico_servicos : catalogo
-    pecas ||--o{ ordens_servico_pecas : catalogo
-    pecas ||--o{ movimentacoes_estoque : movimenta
-
-    usuarios {
-        UUID id PK
-        VARCHAR nome
-        VARCHAR email UK
-        VARCHAR senha_hash
-        PerfilUsuario perfil
-        BOOLEAN ativo
-        TIMESTAMP criado_em
-        TIMESTAMP atualizado_em
-    }
-
-    clientes {
-        UUID id PK
-        VARCHAR nome
-        VARCHAR cpf_cnpj UK
-        VARCHAR email UK
-        VARCHAR telefone
-        BOOLEAN ativo
-        TIMESTAMP criado_em
-        TIMESTAMP atualizado_em
-    }
-
-    auditoria_cliente_status {
-        UUID id PK
-        UUID cliente_id FK
-        BOOLEAN ativo_anterior
-        BOOLEAN ativo_novo
-        UUID alterado_por_id "NULL, sem FK"
-        TIMESTAMP criado_em
-    }
-
-    veiculos {
-        UUID id PK
-        VARCHAR placa UK
-        VARCHAR marca
-        VARCHAR modelo
-        INTEGER ano
-        UUID cliente_id FK
-        TIMESTAMP criado_em
-        TIMESTAMP atualizado_em
-    }
-
-    servicos {
-        UUID id PK
-        VARCHAR nome UK
-        TEXT descricao "NULL"
-        DECIMAL preco_base "DECIMAL(10,2)"
-        INTEGER tempo_estimado_min
-        BOOLEAN ativo
-        TIMESTAMP criado_em
-        TIMESTAMP atualizado_em
-    }
-
-    pecas {
-        UUID id PK
-        VARCHAR codigo UK
-        VARCHAR nome
-        TEXT descricao "NULL"
-        DECIMAL preco_unitario "DECIMAL(10,2)"
-        INTEGER quantidade_estoque
-        INTEGER estoque_minimo
-        BOOLEAN ativo
-        TIMESTAMP criado_em
-        TIMESTAMP atualizado_em
-    }
-
-    ordens_servico {
-        UUID id PK
-        SERIAL numero UK
-        StatusOS status
-        UUID cliente_id FK
-        UUID veiculo_id FK
-        TEXT descricao_problema "NULL"
-        TEXT diagnostico "NULL"
-        TIMESTAMP iniciada_em "NULL"
-        TIMESTAMP finalizada_em "NULL"
-        TIMESTAMP entregue_em "NULL"
-        TIMESTAMP criado_em
-        TIMESTAMP atualizado_em
-    }
-
-    ordens_servico_servicos {
-        UUID id PK
-        UUID ordem_servico_id FK
-        UUID servico_id FK
-        INTEGER quantidade
-        DECIMAL preco_unitario "DECIMAL(10,2)"
-        TIMESTAMP criado_em
-    }
-
-    ordens_servico_pecas {
-        UUID id PK
-        UUID ordem_servico_id FK
-        UUID peca_id FK
-        INTEGER quantidade
-        DECIMAL preco_unitario "DECIMAL(10,2)"
-        TIMESTAMP criado_em
-    }
-
-    orcamentos {
-        UUID id PK
-        UUID ordem_servico_id FK
-        DECIMAL valor_total "DECIMAL(10,2)"
-        StatusOrcamento status
-        TEXT observacoes "NULL"
-        TIMESTAMP aprovado_em "NULL"
-        TIMESTAMP rejeitado_em "NULL"
-        TEXT motivo_rejeicao "NULL"
-        TIMESTAMP criado_em
-        TIMESTAMP atualizado_em
-    }
-
-    historico_status_os {
-        UUID id PK
-        UUID ordem_servico_id FK
-        StatusOS status_anterior "NULL"
-        StatusOS status_novo
-        VARCHAR alterado_por "NULL"
-        TEXT observacao "NULL"
-        TIMESTAMP criado_em
-    }
-
-    movimentacoes_estoque {
-        UUID id PK
-        UUID peca_id FK
-        TipoMovimentacaoEstoque tipo
-        INTEGER quantidade
-        UUID ordem_servico_id FK "NULL"
-        TEXT observacao "NULL"
-        TIMESTAMP criado_em
-    }
-
-    idempotency_records {
-        UUID id PK
-        VARCHAR idempotency_key
-        VARCHAR scope
-        VARCHAR request_hash
-        INTEGER response_status
-        JSONB response_body
-        TIMESTAMP criado_em
-        TIMESTAMP expira_em
-    }
-```
-
-## Responsabilidade
-
-| Recurso           | Descricao                                                      |
-| ----------------- | -------------------------------------------------------------- |
-| RDS PostgreSQL 16 | Banco gerenciado privado, criptografado (gp3), TLS obrigatorio |
-| Parameter group   | `rds.force_ssl=1`, logs de conexao/DDL                         |
-| Secrets Manager   | Credenciais — **nunca** expostas em output Terraform aberto    |
-| Security Group    | Ingress 5432 apenas de Lambda e nodes EKS                      |
-| CloudWatch        | Logs PostgreSQL + alarmes CPU/conexoes/storage                 |
-| SSM               | Endpoint, porta, ARN do secret, SG do RDS                      |
-
-Schema e migrations permanecem no projeto [`tech-challenge-oficina`](https://github.com/7feeh7/tech-challenge-oficina).
-
-## Deploy ativo
-
-SSM `/tech-challenge/producao/database/*` — ARNs e endpoints; senhas só no Secrets Manager e no state protegido.
+Na **Fase 4** este repositório provisiona **uma única instância** RDS PostgreSQL 16 com **dois databases separados**: `oficina` (OS Service) e `billing` (Billing Service). O Execution não usa este banco: sua persistência é DynamoDB, provisionada no repositório `tech-challenge-execution`.
 
 ## Tecnologias
 
-- Terraform >= 1.5
-- AWS RDS PostgreSQL 16 (`db.t3.micro`, 20 GB gp3)
-- AWS Secrets Manager + SSM Parameter Store
+| Tecnologia                | Uso                                                       |
+| ------------------------- | --------------------------------------------------------- |
+| Terraform >= 1.5          | Provisionamento (estado remoto em S3)                     |
+| Amazon RDS PostgreSQL 16  | Instância `db.t3.micro`, 20 GB gp3 (não é Aurora)         |
+| AWS Secrets Manager / SSM | Credenciais e exports para os demais repositórios         |
+| Kubernetes Job + `psql`   | Provisionamento dos databases e dos usuários da aplicação |
+| GitHub Actions            | Validação em PR e deploy na `main`                        |
 
-## Estrutura do projeto
+## Arquitetura
 
+- **Instância:** privada (`publicly_accessible = false`), criptografada, com TLS obrigatório (`rds.force_ssl=1`, e as aplicações usam `DATABASE_SSL=true`). Single-AZ, `deletion_protection` e snapshot final em produção, backup de 7 dias (`terraform/rds.tf`).
+- **Separação por serviço:** um Job administrativo (`k8s/db-admin-job.yaml`, `scripts/db-admin/`) cria os databases `oficina` e `billing`, cada um com usuário próprio, `CONNECTION LIMIT` por usuário e `REVOKE CONNECT ... FROM PUBLIC` (`scripts/db-admin/provision.sql.tpl`). Um serviço não acessa o database do outro.
+- **Credenciais:** senhas geradas pelo Terraform e guardadas no Secrets Manager (nunca em output aberto). O OS e o Billing recebem a própria `DATABASE_URL` no deploy.
+- **Rede:** o security group aceita a porta 5432 só dos nodes do EKS e do security group das Lambdas, ambos publicados pelo `tech-challenge-infra-kubernetes` (leitura em `data.tf`).
+- **Monitoramento:** alarmes CloudWatch de CPU, conexões e armazenamento (`monitoring.tf`).
+- **Schema:** migrations pertencem a cada serviço (`tech-challenge-oficina` e `tech-challenge-billing`), não a este repositório.
+- **SAGA:** este repositório não participa diretamente da SAGA. Ele só guarda o estado transacional do OS e do Billing, incluindo as tabelas de outbox e de mensagens processadas.
+
+Contrato SSM: consome `/tech-challenge/producao/infra/*` e publica `/tech-challenge/producao/database/*` (endpoint, ARNs dos segredos do OS, do Billing e do master, nomes dos databases e security group). Valores reais ficam só na AWS.
+
+## Execução e desenvolvimento
+
+Pré-requisitos: Terraform >= 1.5, AWS CLI, Docker (só para os testes locais do Job) e um `terraform.tfvars` baseado em [`terraform/terraform.tfvars.example`](terraform/terraform.tfvars.example).
+
+Validação local, a mesma do CI (`pr-validation.yml`), sem tocar a AWS:
+
+```bash
+cd terraform
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
+cd ..
+bash scripts/validate-password-charset.sh
 ```
-tech-challenge-infra-database/
-├── terraform/
-│   ├── main.tf                    # Provider, backend S3, tags
-│   ├── variables.tf               # Variáveis
-│   ├── terraform.tfvars.example   # Exemplo de tfvars
-│   ├── data.tf                    # Lê SSM do infra-kubernetes
-│   ├── rds.tf                     # Instância RDS PostgreSQL 16
-│   ├── parameter_group.tf         # force_ssl + logs
-│   ├── security-groups.tf         # Ingress 5432 (Lambda + EKS)
-│   ├── secrets.tf                 # Secrets Manager
-│   ├── ssm.tf                     # Exports SSM
-│   ├── monitoring.tf              # Alarmes CloudWatch
-│   └── outputs.tf                 # Outputs (sem senha)
-├── .github/workflows/
-│   ├── pr-validation.yml          # Validação em PRs (não toca AWS)
-│   └── deploy.yml                 # Apply em main
-├── docs/
-│   ├── backup-restore.md          # Backup, restore e troubleshooting
-│   ├── orcamento-conexoes.md      # Orçamento de conexões (E09)
-│   └── rotacao-credenciais-db.md  # Rotação de senha de app sem reexecutar o Job
-└── README.md
-```
 
-## Dependencias (contrato SSM)
-
-Parametros consumidos de `tech-challenge-infra-kubernetes` em `/tech-challenge/producao/infra/*`:
-
-| Parametro                    | Uso             |
-| ---------------------------- | --------------- |
-| `vpc_id`                     | SG do RDS       |
-| `private_subnet_ids`         | DB subnet group |
-| `lambda_security_group_id`   | Ingress 5432    |
-| `eks_node_security_group_id` | Ingress 5432    |
-
-Parametros **publicados** por este repo em `/tech-challenge/producao/database/*`:
-
-| Parametro                                   | Consumidor                |
-| ------------------------------------------- | ------------------------- |
-| `rds_endpoint` / `rds_address` / `rds_port` | CI/CD, operacao           |
-| `db_secret_arn`                             | OS (`tech-challenge`) deploy e migrate |
-| `billing_db_secret_arn`                     | Billing deploy e migrate |
-| `master_db_secret_arn`                      | Job administrativo (workflow `db-admin-job.yml` apenas) |
-| `db_name`                                   | Configuracao              |
-| `rds_security_group_id`                     | Referencia cruzada        |
-
-### Validação local do Job administrativo (complemento E09)
-
-Requer Docker. Usa PostgreSQL 16 descartável numa rede Docker privada, com o registro equivalente ao do RDS (`log_statement = ddl`), e lê o log real do servidor. Não imprime senhas de teste.
+Testes locais do Job administrativo, com um PostgreSQL 16 descartável em Docker:
 
 ```bash
 bash scripts/db-admin/test-complemento-local.sh
@@ -263,84 +49,17 @@ bash scripts/db-admin/test-senha-fora-do-log-local.sh
 bash scripts/db-admin/test-idempotencia-local.sh
 ```
 
-O Job cria os papéis e define as senhas numa sessão própria do master, sem registro de comandos e com verificador SCRAM-SHA-256 gerado pelo `psql` (`scripts/db-admin/create-role-with-password.sql`); detalhes em `docs/rotacao-credenciais-db.md`. Artefatos dos testes ficam em `.local-test/` (fora do repositório).
+Pipelines:
 
-Rotação de credenciais de aplicação: `docs/rotacao-credenciais-db.md`.
+- `develop` e PR validam (`fmt`, `validate`, charset das senhas, tfsec, TruffleHog) sem tocar a AWS.
+- Na `main`, o `deploy.yml` roda `plan` e `apply`. O `db-admin-job.yml` (`workflow_dispatch`, só na `main`) aplica o Job administrativo.
+- `destroy` é manual e protegido por `deletion_protection` e snapshot final. Backup e restauração em [`docs/backup-restore.md`](docs/backup-restore.md).
 
-### Senhas geradas e URL de conexão
+## Documentação
 
-As senhas do master, do `oficina` e do `billing` (`random_password` em `terraform/secrets.tf`) usam só letras, números e `-_.~` (caracteres não reservados da RFC 3986), com ao menos um de cada classe. O OS e o Billing montam a `DATABASE_URL` sem codificação, e `#`, `?`, `%`, `/`, `@` e `:` a quebrariam. O CI roda `bash scripts/validate-password-charset.sh` e reprova qualquer outro conjunto.
+- Backup, restore, RPO/RTO e troubleshooting: [`docs/backup-restore.md`](docs/backup-restore.md)
+- Orçamento de conexões (pool por serviço e `CONNECTION LIMIT`): [`docs/orcamento-conexoes.md`](docs/orcamento-conexoes.md)
+- Rotação de credenciais dos usuários de aplicação: [`docs/rotacao-credenciais-db.md`](docs/rotacao-credenciais-db.md)
+- Contribuição: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
-## Variaveis
-
-| Variavel                 | Default       | Descricao                                         |
-| ------------------------ | ------------- | ------------------------------------------------- |
-| `environment`            | —             | `producao` (unico provisionado)                   |
-| `db_instance_class`      | `db.t3.micro` | Porte da instancia (~87 conexoes max)             |
-| `db_allocated_storage`   | `20`          | GB gp3 criptografado                              |
-| `db_multi_az`            | `false`       | Single-AZ (ADR-003 — custo demo)                  |
-| `db_skip_final_snapshot` | `true`        | Ignorado em producao (sempre gera snapshot final) |
-
-Copie `terraform/terraform.tfvars.example` para `terraform.tfvars`.
-
-## Deploy
-
-```bash
-cd terraform
-terraform init
-terraform plan   # apenas em main (CI) ou com credencial AWS
-terraform apply
-```
-
-### Branches e pipelines
-
-| Branch    | Workflow            | Toca AWS                                   |
-| --------- | ------------------- | ------------------------------------------ |
-| `develop` | `pr-validation.yml` | **nao** (fmt, validate, tfsec, trufflehog) |
-| `main`    | `deploy.yml`        | **sim** (plan + apply + smoke SSM)         |
-
-State key: `tech-challenge-infra-database/producao/terraform.tfstate`
-
-## Outputs (sem segredos)
-
-| Output          | Descricao                  |
-| --------------- | -------------------------- |
-| `rds_endpoint`  | host:porta                 |
-| `rds_address`   | hostname                   |
-| `db_secret_arn` | ARN Secrets Manager        |
-| `ssm_prefix`    | `/tech-challenge/producao` |
-
-Senha e connection string **somente** no Secrets Manager.
-
-## Backup e restore
-
-- Retencao: 7 dias, janela 03:00–04:00 UTC
-- RPO ≤ 24 h, RTO ≤ 45 min
-- Procedimento de teste de restauracao: [`docs/backup-restore.md`](docs/backup-restore.md)
-
-## Acesso
-
-- RDS **nao** e publicamente acessivel
-- Conexao apenas de pods EKS e Lambda na VPC privada
-- TLS obrigatorio (`rds.force_ssl=1`); app usa `DATABASE_SSL=true`
-
-## Protecao contra exclusao
-
-- `deletion_protection = true` em producao
-- Snapshot final obrigatorio ao destruir instancia em producao
-- Destroy manual via `workflow_dispatch` — nunca automatico em push
-
-## GitHub Secrets
-
-| Secret                                        | Uso                                |
-| --------------------------------------------- | ---------------------------------- |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Deploy                             |
-| `TF_STATE_BUCKET`                             | Backend S3                         |
-| `TF_STATE_LOCK_TABLE`                         | Lock DynamoDB                      |
-## Rollback
-
-Reverta o commit e merge em `main`, ou `workflow_dispatch` → destroy (manual).
-
-## Troubleshooting
-
-Ver [`docs/backup-restore.md`](docs/backup-restore.md#troubleshooting).
+Repositórios relacionados, todos em `github.com/7feeh7/<repositório>`: `tech-challenge-infra-kubernetes` (rede e EKS), `tech-challenge-oficina`, `tech-challenge-billing`, `tech-challenge-execution` e `tech-challenge-serverless`.
